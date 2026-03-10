@@ -7,7 +7,13 @@ namespace BlackjackGame
     public class Card
     {
         public int Value { get; }
-        public Card(int value) => Value = value;
+        public string Name { get; }
+
+        public Card(int value, string name)
+        {
+            Value = value;
+            Name = name;
+        }
     }
 
     public class Deck
@@ -19,17 +25,23 @@ namespace BlackjackGame
 
         public void Reset()
         {
-            int[] values = {
-                2,2,2,2, 3,3,3,3, 4,4,4,4, 5,5,5,5, 6,6,6,6, 7,7,7,7, 8,8,8,8, 9,9,9,9,
-                10,10,10,10, 2,2,2,2, 3,3,3,3, 4,4,4,4, 11,11,11,11
-            };
-            _cards = values.Select(v => new Card(v)).ToList();
+            _cards = new List<Card>();
+            string[] faces = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+            int[] values = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < faces.Length; j++)
+                {
+                    _cards.Add(new Card(values[j], faces[j]));
+                }
+            }
         }
 
         public Card Draw()
         {
             if (_cards.Count == 0) Reset();
-            int index = _rnd.Next(_cards.Count); 
+            int index = _rnd.Next(_cards.Count);
             Card card = _cards[index];
             _cards.RemoveAt(index);
             return card;
@@ -40,14 +52,36 @@ namespace BlackjackGame
     {
         public string Name { get; }
         public List<Card> Hand { get; } = new List<Card>();
-        public int Score => Hand.Sum(c => c.Value);
+
+        public int Score
+        {
+            get
+            {
+                int score = Hand.Sum(c => c.Value);
+                int acesCount = Hand.Count(c => c.Value == 11);
+
+                while (score > 21 && acesCount > 0)
+                {
+                    score -= 10; 
+                    acesCount--;
+                }
+                return score;
+            }
+        }
 
         public Participant(string name) => Name = name;
 
-        public void TakeCard(Card card)
+        public void TakeCard(Card card, bool isHidden = false)
         {
             Hand.Add(card);
-            Console.WriteLine($"{Name} drew: {card.Value}. Total score: {Score}");
+            if (!isHidden)
+            {
+                Console.WriteLine($"{Name} drew: [{card.Name}]. Current score: {Score}");
+            }
+            else
+            {
+                Console.WriteLine($"{Name} drew a hidden card.");
+            }
         }
 
         public void ClearHand() => Hand.Clear();
@@ -82,19 +116,38 @@ namespace BlackjackGame
 
             Console.WriteLine("\n--- New Round ---");
 
-            for (int i = 0; i < 3; i++) _dealer.TakeCard(_deck.Draw());
-            Console.WriteLine($"Dealer has a total of: {_dealer.Score}\n");
+            _player.TakeCard(_deck.Draw());
+            _player.TakeCard(_deck.Draw());
 
-            for (int i = 0; i < 2; i++) _player.TakeCard(_deck.Draw());
+            Console.WriteLine();
 
-            while (_player.Score <= 21)
+            _dealer.TakeCard(_deck.Draw());
+            Card hiddenDealerCard = _deck.Draw();
+            _dealer.TakeCard(hiddenDealerCard, isHidden: true);
+
+            Console.WriteLine();
+
+            while (_player.Score < 21)
             {
-                Console.WriteLine("Do you want to draw another card? (N to stop)");
+                Console.WriteLine($"Your score: {_player.Score}. Hit? (Y/N)");
                 string input = Console.ReadLine()?.ToUpper();
                 if (input == "N") break;
 
                 _player.TakeCard(_deck.Draw());
-                Console.WriteLine($"Current total: {_player.Score}");
+            }
+
+            if (_player.Score > 21)
+            {
+                DetermineWinner();
+                return;
+            }
+            Console.WriteLine($"\n--- Dealer's Turn ---");
+            Console.WriteLine($"Dealer reveals hidden card: [{hiddenDealerCard.Name}]. Dealer's score: {_dealer.Score}");
+
+            while (_dealer.Score < 17)
+            {
+                Console.WriteLine("Dealer score is under 17. Drawing...");
+                _dealer.TakeCard(_deck.Draw());
             }
 
             DetermineWinner();
@@ -102,18 +155,19 @@ namespace BlackjackGame
 
         private void DetermineWinner()
         {
+            Console.WriteLine("\n--- Results ---");
             int pScore = _player.Score;
             int dScore = _dealer.Score;
 
-            if (dScore > 21)
+            if (pScore > 21)
             {
-                Console.WriteLine($"You win! Dealer busted with: {dScore}");
-                _wins++;
-            }
-            else if (pScore > 21)
-            {
-                Console.WriteLine($"You lost! You busted with: {pScore}");
+                Console.WriteLine($"You busted with {pScore}! Dealer wins.");
                 _losses++;
+            }
+            else if (dScore > 21)
+            {
+                Console.WriteLine($"Dealer busted with {dScore}! You win.");
+                _wins++;
             }
             else if (pScore > dScore)
             {
@@ -122,12 +176,12 @@ namespace BlackjackGame
             }
             else if (pScore == dScore)
             {
-                Console.WriteLine($"It's a tie! Both have: {pScore}");
+                Console.WriteLine($"It's a tie! Both have {pScore}");
                 _ties++;
             }
             else
             {
-                Console.WriteLine($"You lost! {pScore} vs {dScore}");
+                Console.WriteLine($"Dealer wins! {dScore} vs {pScore}");
                 _losses++;
             }
         }
